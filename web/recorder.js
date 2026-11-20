@@ -21,6 +21,11 @@ const clipPreview = $("#clip-preview");
 const emptyState = $("#empty-state");
 const dropzone = $("#dropzone");
 const MAX_SECONDS = 12;
+const EMOTION_EMOJI = {
+  neutral: "😐", happy: "😊", sad: "😢", angry: "😠",
+  fearful: "😨", fear: "😨", surprised: "😮", surprise: "😮",
+  disgusted: "🤢", disgust: "🤢", unavailable: "🔇",
+};
 
 let replyText;
 let speechUrl;
@@ -279,9 +284,22 @@ send.addEventListener("click", async () => {
       ? "Manual transcription — supplied by you" : data.transcript ? "Google Speech-to-Text" : "";
 
     const cue = $("#vocal-cue");
-    cue.textContent = data.vocal_cue
-      ? `${data.vocal_cue.label} · ${data.vocal_cue.model_version}` : "Unavailable — using your words alone.";
-    cue.dataset.label = data.vocal_cue ? String(data.vocal_cue.label).toLowerCase() : "unavailable";
+    const label = data.vocal_cue ? String(data.vocal_cue.label).toLowerCase() : "unavailable";
+    const emoji = document.createElement("span");
+    emoji.className = "emoji";
+    emoji.setAttribute("aria-hidden", "true");
+    emoji.textContent = EMOTION_EMOJI[label] || "🎙️";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = data.vocal_cue ? data.vocal_cue.label : "Unavailable — using your words alone.";
+    cue.replaceChildren(emoji, name);
+    if (data.vocal_cue) {
+      const model = document.createElement("small");
+      model.className = "model";
+      model.textContent = data.vocal_cue.model_version;
+      cue.append(model);
+    }
+    cue.dataset.label = label;
 
     $("#reply").textContent = data.reply_text || "No reply yet. Please retry.";
     $("#reply-model").textContent = data.resolved_model || "";

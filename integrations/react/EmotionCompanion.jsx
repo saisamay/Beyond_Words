@@ -14,13 +14,13 @@ const API = (import.meta.env.VITE_COMPANION_API_URL || "").replace(/\/$/, "");
 const MAX_SECONDS = 12;
 
 const EMOTIONS = {
-  neutral: { label: "Neutral", cls: "text-slate-300 bg-slate-400/10 border-slate-400/30", dot: "bg-slate-400" },
-  happy: { label: "Happy", cls: "text-emerald-300 bg-emerald-400/10 border-emerald-400/30", dot: "bg-emerald-400" },
-  sad: { label: "Sad", cls: "text-sky-300 bg-sky-400/10 border-sky-400/30", dot: "bg-sky-400" },
-  angry: { label: "Angry", cls: "text-red-300 bg-red-400/10 border-red-400/30", dot: "bg-red-400" },
-  fearful: { label: "Fearful", cls: "text-purple-300 bg-purple-400/10 border-purple-400/30", dot: "bg-purple-400" },
-  surprised: { label: "Surprised", cls: "text-amber-300 bg-amber-400/10 border-amber-400/30", dot: "bg-amber-400" },
-  disgusted: { label: "Disgusted", cls: "text-teal-300 bg-teal-400/10 border-teal-400/30", dot: "bg-teal-400" },
+  neutral: { emoji: "😐", label: "Neutral", cls: "text-slate-300 bg-slate-400/10 border-slate-400/30", dot: "bg-slate-400" },
+  happy: { emoji: "😊", label: "Happy", cls: "text-emerald-300 bg-emerald-400/10 border-emerald-400/30", dot: "bg-emerald-400" },
+  sad: { emoji: "😢", label: "Sad", cls: "text-sky-300 bg-sky-400/10 border-sky-400/30", dot: "bg-sky-400" },
+  angry: { emoji: "😠", label: "Angry", cls: "text-red-300 bg-red-400/10 border-red-400/30", dot: "bg-red-400" },
+  fearful: { emoji: "😨", label: "Fearful", cls: "text-purple-300 bg-purple-400/10 border-purple-400/30", dot: "bg-purple-400" },
+  surprised: { emoji: "😮", label: "Surprised", cls: "text-amber-300 bg-amber-400/10 border-amber-400/30", dot: "bg-amber-400" },
+  disgusted: { emoji: "🤢", label: "Disgusted", cls: "text-teal-300 bg-teal-400/10 border-teal-400/30", dot: "bg-teal-400" },
 };
 
 const NOTICES = {
@@ -46,14 +46,14 @@ function EmotionChip({ cue }) {
   if (!cue) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-slate-500" /> Unavailable
+        <span aria-hidden="true" className="text-base leading-none">🔇</span> Unavailable
       </span>
     );
   }
   const style = EMOTIONS[cue.label] || EMOTIONS.neutral;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${style.cls}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} /> {style.label}
+    <span className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-1.5 pr-3 text-sm font-semibold ${style.cls}`}>
+      <span aria-hidden="true" className="text-lg leading-none">{style.emoji}</span> {style.label}
     </span>
   );
 }

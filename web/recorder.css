@@ -223,6 +223,11 @@ textarea:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3p
   border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
 }
 .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.chip:has(.emoji)::before { display: none; }
+.chip { padding: .25rem .75rem .25rem .45rem; font-size: .85rem; }
+.chip .emoji { font-size: 1.15rem; line-height: 1; }
+.chip .name { text-transform: capitalize; }
+.chip .model { font-weight: 500; opacity: .7; font-size: .72rem; padding-left: .4rem; border-left: 1px solid currentColor; }
 .chip[data-label="neutral"] { --c: #64748b; }
 .chip[data-label="happy"] { --c: #16a34a; }
 .chip[data-label="sad"] { --c: #2563eb; }
