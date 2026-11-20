@@ -307,9 +307,17 @@ SUPPORT_EXAMPLE = {
 
 
 def support_reply() -> str:
-    return _generate(
+    system_prompt = (
         SYSTEM_PROMPT + "\nThis is a fictional delayed-delivery support demonstration. Use only the supplied facts. "
         "Acknowledge the delay and say a handover brief is ready for a person to review. "
-        "Do not claim a ticket was created, a person was contacted, or a refund, replacement, or delivery date is confirmed.",
-        json.dumps({"transcript": SUPPORT_EXAMPLE["transcript"], "facts": SUPPORT_EXAMPLE["facts"]}),
-    )
+        "Do not claim a ticket was created, a person was contacted, or a refund, replacement, or delivery date is confirmed.")
+    contents = json.dumps({"transcript": SUPPORT_EXAMPLE["transcript"], "facts": SUPPORT_EXAMPLE["facts"]})
+    primary = os.environ.get("GEMINI_MODEL")
+    fallback = os.environ.get("GEMINI_FALLBACK_MODEL")
+    try:
+        return _generate(system_prompt, contents, model=primary)
+    except Exception as error:
+        # Same rule as Companion turns: fall back only on a structured capacity error.
+        if not fallback or fallback == primary or not is_capacity_error(error):
+            raise
+        return _generate(system_prompt, contents, model=fallback)
