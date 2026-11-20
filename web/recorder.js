@@ -84,9 +84,13 @@ record.addEventListener("click", async () => {
       resetControls("Open this page in a supported browser on localhost or HTTPS.");
       return;
     }
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Ask the browser for a cleaner, level-adjusted mono voice signal; browsers ignore
+    // constraints they cannot honor, so this never blocks recording.
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
     const chunks = [];
-    recorder = new MediaRecorder(stream);
+    recorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 });
     let recordingFailed = false;
     recorder.addEventListener("dataavailable", event => {
       if (event.data.size) chunks.push(event.data);

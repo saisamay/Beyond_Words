@@ -47,6 +47,8 @@ of Git and browser JavaScript:
 | `GOOGLE_CLOUD_QUOTA_PROJECT` | Optional explicit quota project for Google client libraries |
 | `SPEECH_LANGUAGE_CODE` | Optional Speech-to-Text language selection |
 | `SPEECH_TRANSPORT` | Optional STT transport; short uploads use REST by default; gRPC remains selectable |
+| `SPEECH_MODEL` | Optional STT recognition model; defaults to `latest_long` (more accurate on quiet/noisy speech), automatically retries with `default` if unsupported for the language |
+| `SPEECH_PHRASES` | Optional comma-separated words/names to bias recognition (e.g. product names, order IDs) |
 | `TTS_LANGUAGE_CODE` | Optional speech synthesis language |
 | `TTS_VOICE_NAME` | Optional Google voice selection |
 | `CHECKPOINT_PATH` | Optional classifier checkpoint override; default is the existing file in `model_weights/` |

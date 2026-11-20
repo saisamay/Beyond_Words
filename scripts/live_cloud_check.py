@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import companion
-from app import normalize, predict
+from app import normalize, predict, transcribe_with_retry
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
         except Exception as error:
             print("VOCAL MODEL FAILED:", type(error).__name__)
         try:
-            transcript = companion.transcribe(wav)
+            transcript = transcribe_with_retry(wav)
             print("REAL SPEECH-TO-TEXT PASSED:", transcript)
         except Exception as error:
             failures.append("Speech-to-Text")

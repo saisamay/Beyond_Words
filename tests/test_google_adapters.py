@@ -35,6 +35,28 @@ def test_speech_request_uses_normalized_audio(tmp_path, monkeypatch):
     client.transport.close.assert_called_once()
 
 
+def test_speech_uses_accurate_model_and_falls_back_when_rejected(tmp_path, monkeypatch):
+    from google.api_core import exceptions
+    from google.cloud import speech
+
+    path = tmp_path / "input.wav"
+    path.write_bytes(b"TEST WAV")
+    client = Mock()
+    client.recognize.side_effect = [
+        exceptions.InvalidArgument("model not supported"),
+        SimpleNamespace(results=[SimpleNamespace(alternatives=[SimpleNamespace(transcript=" Quiet words. ")])]),
+    ]
+    monkeypatch.setattr(speech, "SpeechClient", lambda **kwargs: client)
+    monkeypatch.delenv("SPEECH_MODEL", raising=False)
+    monkeypatch.setenv("SPEECH_PHRASES", "Beyond Words, BW-DEMO-1042")
+    assert companion.transcribe(path) == "Quiet words."
+    first, second = (call.kwargs["config"] for call in client.recognize.call_args_list)
+    assert first.model == "latest_long"
+    assert list(first.speech_contexts[0].phrases) == ["Beyond Words", "BW-DEMO-1042"]
+    assert second.model == ""
+    client.transport.close.assert_called_once()
+
+
 def test_empty_speech_result_closes_client(tmp_path, monkeypatch):
     from google.cloud import speech
 

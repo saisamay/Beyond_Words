@@ -132,25 +132,60 @@ For a sharp complaint with little context, a suitable response is:
 """
 
 
+def _speech_phrases() -> list[str]:
+    """Optional comma-separated hint phrases (product names, order IDs) to bias recognition."""
+    raw = os.environ.get("SPEECH_PHRASES", "")
+    return [phrase.strip() for phrase in raw.split(",") if phrase.strip()][:500]
+
+
 def transcribe(wav_path: Path) -> str:
+    """Transcribe with an accuracy-oriented model (``SPEECH_MODEL``, default ``latest_long``).
+
+    If that model is rejected for the configured language, retry once with ``default``.
+    """
+    from google.api_core import exceptions as google_exceptions
     from google.cloud import speech
+
+    model = os.environ.get("SPEECH_MODEL", "latest_long").strip() or "default"
+    phrases = _speech_phrases()
+
+    def config(model_name: str):
+        options = dict(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000,
+            audio_channel_count=1,
+            language_code=os.environ.get("SPEECH_LANGUAGE_CODE", "en-IN"),
+            enable_automatic_punctuation=True,
+            max_alternatives=1,
+        )
+        if model_name != "default":
+            options["model"] = model_name
+        if phrases:
+            options["speech_contexts"] = [speech.SpeechContext(phrases=phrases, boost=10)]
+        return speech.RecognitionConfig(**options)
+
+    def recognize(path: Path, model_name: str) -> str:
+        response = client.recognize(
+            config=config(model_name),
+            audio=speech.RecognitionAudio(content=path.read_bytes()),
+            retry=None,
+            timeout=25,
+        )
+        return " ".join(r.alternatives[0].transcript.strip() for r in response.results
+                        if r.alternatives and r.alternatives[0].transcript.strip()).strip()
 
     # Short uploads use HTTPS REST by default; gRPC hit repeated local deadlines.
     client = speech.SpeechClient(transport=os.environ.get("SPEECH_TRANSPORT", "rest"))
     try:
-        response = client.recognize(
-            config=speech.RecognitionConfig(
-                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=16000,
-                audio_channel_count=1,
-                language_code=os.environ.get("SPEECH_LANGUAGE_CODE", "en-IN"),
-                enable_automatic_punctuation=True,
-            ),
-            audio=speech.RecognitionAudio(content=wav_path.read_bytes()),
-            retry=None,
-            timeout=25,
-        )
-        text = " ".join(r.alternatives[0].transcript for r in response.results if r.alternatives).strip()
+        try:
+            text = recognize(wav_path, model)
+        except google_exceptions.InvalidArgument:
+            if model == "default":
+                raise
+            # The chosen model is not offered for this language/region; use the standard one.
+            logger.warning("Speech model %s rejected; retrying with default model", model)
+            model = "default"
+            text = recognize(wav_path, model)
         if not text:
             raise ValueError("No speech recognized")
         return text

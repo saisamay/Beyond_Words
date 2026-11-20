@@ -121,6 +121,40 @@ def normalize(source: Path, target: Path) -> None:
         raise HTTPException(503, "Audio conversion is unavailable on the server (ffmpeg missing).")
 
 
+# Speech-only cleanup: cut rumble/hiss, reduce steady background noise, and lift quiet
+# speech to a consistent level. Used only for Speech-to-Text; the emotion model keeps the
+# untouched clip so its training preprocessing is preserved.
+SPEECH_FILTER = ("highpass=f=80,lowpass=f=7600,afftdn=nf=-25,"
+                 "dynaudnorm=f=150:g=15:p=0.9:m=20,alimiter=limit=0.95")
+
+
+def enhance_for_speech(wav: Path, target: Path) -> Path:
+    """Return a speech-enhanced copy of ``wav``, or ``wav`` itself if enhancement fails."""
+    try:
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(wav), "-af", SPEECH_FILTER,
+             "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(target)],
+            check=True, capture_output=True, timeout=15,
+        )
+        with wave.open(str(target), "rb") as enhanced:
+            if enhanced.getnframes() > 0:
+                return target
+    except (subprocess.SubprocessError, OSError, wave.Error, EOFError):
+        logger.warning("Speech enhancement unavailable; transcribing the original clip")
+    return wav
+
+
+def transcribe_with_retry(wav: Path) -> str:
+    """Transcribe the enhanced clip; if nothing is recognized, retry on the original."""
+    enhanced = enhance_for_speech(wav, wav.with_name("speech.wav"))
+    try:
+        return companion.transcribe(enhanced)
+    except ValueError:
+        if enhanced == wav:
+            raise
+        return companion.transcribe(wav)
+
+
 def token_for(transcript: str, cue: dict | None, *, configuration: dict | None = None,
               reply_result: dict | None = None) -> str:
     payload = base64.urlsafe_b64encode(json.dumps({
@@ -162,7 +196,7 @@ def process_turn(source: Path, wav: Path, manual: str) -> dict:
     parallel_started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="bw-audio") as pool:
         cue_future = pool.submit(timed_audio_call, predict, wav)
-        text_future = pool.submit(timed_audio_call, companion.transcribe, wav) if not manual else None
+        text_future = pool.submit(timed_audio_call, transcribe_with_retry, wav) if not manual else None
         cue, cue_error, timings["inference_ms"] = cue_future.result()
         transcript, text_error, timings["transcription_ms"] = text_future.result() if text_future else (manual, None, 0)
     timings["audio_parallel_ms"] = round((time.perf_counter() - parallel_started) * 1000, 1)
