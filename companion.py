@@ -310,14 +310,29 @@ def support_reply() -> str:
     system_prompt = (
         SYSTEM_PROMPT + "\nThis is a fictional delayed-delivery support demonstration. Use only the supplied facts. "
         "Acknowledge the delay and say a handover brief is ready for a person to review. "
-        "Do not claim a ticket was created, a person was contacted, or a refund, replacement, or delivery date is confirmed.")
+        "Do not claim a ticket was created, a person was contacted, or a refund, replacement, or delivery date is confirmed. "
+        "Always finish with complete sentences.")
     contents = json.dumps({"transcript": SUPPORT_EXAMPLE["transcript"], "facts": SUPPORT_EXAMPLE["facts"]})
     primary = os.environ.get("GEMINI_MODEL")
     fallback = os.environ.get("GEMINI_FALLBACK_MODEL")
+
+    def generate(model):
+        # Some models occasionally stop mid-sentence while still reporting STOP; retry once.
+        text = _generate(system_prompt, contents, model=model)
+        if not is_complete_sentence(text):
+            text = _generate(system_prompt, contents, model=model)
+        if not is_complete_sentence(text):
+            raise ValueError("Gemini returned an incomplete support reply")
+        return text
+
     try:
-        return _generate(system_prompt, contents, model=primary)
+        return generate(primary)
     except Exception as error:
         # Same rule as Companion turns: fall back only on a structured capacity error.
         if not fallback or fallback == primary or not is_capacity_error(error):
             raise
-        return _generate(system_prompt, contents, model=fallback)
+        return generate(fallback)
+
+
+def is_complete_sentence(text: str) -> bool:
+    return text.rstrip().endswith((".", "!", "?", "…", '"', "”", "'", ")"))

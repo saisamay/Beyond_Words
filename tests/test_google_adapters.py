@@ -212,3 +212,12 @@ def test_provider_error_redacts_private_inputs_and_credentials():
     assert "PRIVATE_TRANSCRIPT" not in details["message"]
     assert "secret_token" not in details["message"]
     assert "ya29." not in details["message"]
+
+
+def test_support_reply_retries_an_unfinished_sentence(monkeypatch):
+    replies = iter(["I am sorry your package is delayed. I have a", "A brief is ready for a person to review."])
+    calls = []
+    monkeypatch.setattr(companion, "_generate", lambda *args, **kwargs: calls.append(kwargs) or next(replies))
+    monkeypatch.setenv("GEMINI_MODEL", "primary-model")
+    assert companion.support_reply() == "A brief is ready for a person to review."
+    assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
