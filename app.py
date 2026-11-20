@@ -124,8 +124,8 @@ def normalize(source: Path, target: Path) -> None:
 # Speech-only cleanup: cut rumble/hiss, reduce steady background noise, and lift quiet
 # speech to a consistent level. Used only for Speech-to-Text; the emotion model keeps the
 # untouched clip so its training preprocessing is preserved.
-SPEECH_FILTER = ("highpass=f=80,lowpass=f=7600,afftdn=nf=-25,"
-                 "dynaudnorm=f=150:g=15:p=0.9:m=20,alimiter=limit=0.95")
+SPEECH_FILTER = ("highpass=f=80,lowpass=f=7600,dynaudnorm=f=150:g=15:p=0.9:m=20,"
+                 "afftdn=nf=-25,alimiter=limit=0.95")
 
 
 def enhance_for_speech(wav: Path, target: Path) -> Path:
