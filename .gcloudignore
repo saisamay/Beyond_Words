@@ -20,3 +20,13 @@ local_audio/
 *.ogg
 
 .git/
+.pytest_cache/
+artifacts/
+tests/
+*.mp4
+*.bin
+*.zip
+*.key
+*.json
+credentials*/
+secrets/

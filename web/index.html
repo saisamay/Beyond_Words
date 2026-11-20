@@ -3,22 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Beyond Words | Voice capture</title>
+  <title>Beyond Words | Companion</title>
   <link rel="stylesheet" href="/recorder.css">
   <script src="/recorder.js" defer></script>
 </head>
 <body>
   <main>
     <h1>Beyond Words</h1>
-    <p>Record a short voice sample, play it back, and download it for local model testing.</p>
-    <label><input id="consent" type="checkbox"> I agree to use my microphone for this test.</label>
+    <p>Your words, with room for how you say them. Record up to 12 seconds, then send a Companion turn.</p>
+    <label><input id="consent" type="checkbox"> I agree to record and send this clip to the server and Google for this demo.</label>
     <div class="actions">
       <button id="record" disabled>Start recording</button>
       <button id="stop" disabled>Stop</button>
+      <button id="send" disabled>Send to Companion</button>
     </div>
     <p id="status" role="status">Give microphone consent to begin.</p>
     <audio id="playback" controls hidden></audio>
     <a id="download" hidden>Download recording</a>
+    <p><label>Or choose an existing clip (up to 8 MiB / 20 seconds)
+      <input id="clip" type="file" accept="audio/*,video/webm,video/mp4">
+    </label></p>
+    <div id="manual-panel" hidden>
+      <label for="manual">What you said — manual transcription</label>
+      <textarea id="manual" maxlength="4000" rows="3" placeholder="Type the words from this recording, then retry Send."></textarea>
+      <p>This will be labeled as your manual transcription.</p>
+    </div>
+    <section id="results" hidden aria-live="polite">
+      <h2>What you said</h2>
+      <p id="transcript"></p><small id="transcript-source"></small>
+      <h2>Vocal cue</h2>
+      <p id="vocal-cue"></p>
+      <small>A tentative model observation, not a diagnosis or certainty about your feelings.</small>
+      <h2>Companion reply</h2>
+      <p id="reply"></p>
+      <p id="fallback"></p>
+      <button id="speak" disabled>Play Companion reply</button>
+      <audio id="reply-audio" controls hidden></audio>
+      <button id="compare" disabled>Compare without vocal cue</button>
+      <p id="comparison" aria-live="polite"></p>
+    </section>
+    <details>
+      <summary>Delivery support example</summary>
+      <p>Fictional text example. No audio or vocal cue is supplied, and no ticket is sent.</p>
+      <button id="support-demo">Show delayed-delivery example</button>
+      <div id="support-result" hidden>
+        <h2>Customer said (scripted example)</h2><p id="support-transcript"></p>
+        <h2>Support reply</h2><p id="support-reply"></p>
+        <h2>Human-handover brief</h2><dl id="handover"></dl>
+      </div>
+    </details>
   </main>
 </body>
 </html>

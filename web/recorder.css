@@ -29,4 +29,16 @@ button:disabled { background: #e1e8e3; color: #47554c; border-color: #c8d7ce; }
 :focus-visible { outline: 3px solid #a04c12; outline-offset: 4px; }
 audio { max-width: 100%; margin-bottom: .75rem; }
 a { color: #134630; }
+textarea { box-sizing: border-box; display: block; width: 100%; margin-top: .5rem; padding: .75rem; font: inherit; }
+input[type="file"] { display: block; max-width: 100%; margin-top: .5rem; }
+section { margin-top: 1.5rem; border-top: 1px solid #c8d7ce; padding-top: 1rem; }
+h2 { font-size: 1.1rem; margin-bottom: .25rem; }
+small { color: #47554c; }
+#fallback, #transcript-source { font-size: .9rem; }
+#status { min-height: 3rem; }
+button:not(:disabled) { cursor: pointer; }
+details { margin-top: 2rem; }
+summary { cursor: pointer; }
+dt { font-weight: 600; text-transform: capitalize; }
+dd { margin: .25rem 0 1rem; }
 [hidden] { display: none; }

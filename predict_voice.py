@@ -2,8 +2,12 @@
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import tempfile
+import threading
+import wave
 from pathlib import Path
 from time import perf_counter
 from typing import Optional, TypedDict
@@ -14,7 +18,7 @@ import torch.nn as nn
 from funasr import AutoModel
 
 REPO_ROOT = Path(__file__).resolve().parent
-CHECKPOINT_PATH = REPO_ROOT / "model_weights" / "emotion2vec_final_model.pth"
+CHECKPOINT_PATH = Path(os.environ.get("CHECKPOINT_PATH", REPO_ROOT / "model_weights" / "emotion2vec_final_model.pth"))
 MODEL_VERSION = "emotion2vec_plus_base-mlp-v1"
 
 
@@ -47,10 +51,47 @@ _classifier: Optional[EmotionClassifier] = None
 _scaler_mean: Optional[np.ndarray] = None
 _scaler_scale: Optional[np.ndarray] = None
 _idx_to_emotion: Optional[dict[int, str]] = None
+_load_lock = threading.Lock()
+_load_count = 0
+_load_ms = 0.0
+_encoder_source: Optional[str] = None
+
+
+def _cached_encoder_source() -> str:
+    if configured := os.environ.get("EMOTION2VEC_MODEL_PATH"):
+        return configured
+    from huggingface_hub.constants import HF_HUB_CACHE
+    root = Path(HF_HUB_CACHE) / "models--emotion2vec--emotion2vec_plus_base"
+    revision = root / "refs" / "main"
+    preferred = root / "snapshots" / revision.read_text().strip() if revision.is_file() else None
+    snapshots = sorted((root / "snapshots").glob("*"), key=lambda path: path.stat().st_mtime, reverse=True)
+    for path in ([preferred] if preferred else []) + snapshots:
+        if all((path / name).is_file() for name in ("model.pt", "config.yaml", "configuration.json", "tokens.txt")):
+            return str(path)
+    return "iic/emotion2vec_plus_base"
+
+
+def model_status() -> dict:
+    return {"loaded": _encoder is not None and _classifier is not None,
+            "load_count": _load_count, "load_ms": _load_ms, "model_version": MODEL_VERSION,
+            "encoder_cached": bool(_encoder_source and Path(_encoder_source).is_dir())}
+
+
+def warm_model() -> dict:
+    _ensure_loaded()
+    return model_status()
 
 
 def _ensure_loaded() -> None:
+    if _encoder is not None and _classifier is not None:
+        return
+    with _load_lock:
+        _load_components()
+
+
+def _load_components() -> None:
     global _encoder, _classifier, _scaler_mean, _scaler_scale, _idx_to_emotion
+    global _load_count, _load_ms, _encoder_source
 
     if _encoder is not None and _classifier is not None:
         return
@@ -58,8 +99,10 @@ def _ensure_loaded() -> None:
     if not CHECKPOINT_PATH.is_file():
         raise FileNotFoundError(f"Model checkpoint not found: {CHECKPOINT_PATH}")
 
-    _encoder = AutoModel(
-        model="iic/emotion2vec_plus_base",
+    started = perf_counter()
+    source = _cached_encoder_source()
+    encoder = AutoModel(
+        model=source,
         hub="hf",
         device="cpu",
         disable_update=True,
@@ -70,7 +113,6 @@ def _ensure_loaded() -> None:
     model = EmotionClassifier()
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    _classifier = model
 
     mean = np.asarray(checkpoint["scaler_mean"], dtype=np.float32)
     scale = np.asarray(checkpoint["scaler_scale"], dtype=np.float32)
@@ -82,12 +124,30 @@ def _ensure_loaded() -> None:
     _scaler_mean = mean
     _scaler_scale = scale
     _idx_to_emotion = {int(k): v for k, v in checkpoint["idx_to_emotion"].items()}
+    # Publish only after every component has loaded successfully; a retry is safe.
+    _encoder = encoder
+    _classifier = model
+    _encoder_source = source
+    _load_count += 1
+    _load_ms = round((perf_counter() - started) * 1000, 1)
 
 
 def _convert_to_wav(input_path: Path, output_path: Path) -> None:
+    # The HTTP path already normalizes audio for STT. Preserve those exact samples.
+    try:
+        with wave.open(str(input_path), "rb") as wav:
+            compatible = (wav.getnchannels(), wav.getframerate(), wav.getsampwidth(), wav.getcomptype()) == (1, 16000, 2, "NONE")
+        if compatible:
+            shutil.copyfile(input_path, output_path)
+            return
+    except (wave.Error, EOFError):
+        pass
     command = [
         "ffmpeg",
         "-y",
+        "-nostdin",
+        "-v",
+        "error",
         "-i",
         str(input_path),
         "-vn",
@@ -104,6 +164,7 @@ def _convert_to_wav(input_path: Path, output_path: Path) -> None:
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
+        timeout=30,
     )
 
 

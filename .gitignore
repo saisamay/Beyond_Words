@@ -18,3 +18,15 @@ local_audio/
 *.m4a
 *.mp3
 *.ogg
+*.mp4
+*.bin
+*.zip
+*.key
+*credentials*.json
+*service-account*.json
+*service_account*.json
+credentials*/
+secrets/
+.pytest_cache/
+*.json
+artifacts/
