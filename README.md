@@ -45,7 +45,7 @@ of Git and browser JavaScript:
 | `GOOGLE_CLOUD_LOCATION` | Vertex model location; configure for the approved model |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Optional ADC credential file path outside the repo; user ADC or Cloud Run identity normally avoids this |
 | `GOOGLE_CLOUD_QUOTA_PROJECT` | Optional explicit quota project for Google client libraries |
-| `SPEECH_LANGUAGE_CODE` | Optional Speech-to-Text language selection |
+| `SPEECH_LANGUAGE_CODE` | Optional Speech-to-Text language; defaults to `en-US`, which transcribed Indian-accented test speech far more accurately than `en-IN` |
 | `SPEECH_TRANSPORT` | Optional STT transport; short uploads use REST by default; gRPC remains selectable |
 | `SPEECH_MODEL` | Optional STT recognition model; defaults to `latest_long` (more accurate on quiet/noisy speech), automatically retries with `default` if unsupported for the language |
 | `SPEECH_PHRASES` | Optional comma-separated words/names to bias recognition (e.g. product names, order IDs) |

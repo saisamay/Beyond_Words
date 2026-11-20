@@ -154,7 +154,7 @@ def transcribe(wav_path: Path) -> str:
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             audio_channel_count=1,
-            language_code=os.environ.get("SPEECH_LANGUAGE_CODE", "en-IN"),
+            language_code=os.environ.get("SPEECH_LANGUAGE_CODE", "en-US"),
             enable_automatic_punctuation=True,
             max_alternatives=1,
         )
