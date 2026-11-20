@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beyond Words | Voice capture</title>
+  <link rel="stylesheet" href="/recorder.css">
+  <script src="/recorder.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Beyond Words</h1>
+    <p>Record a short voice sample, play it back, and download it for local model testing.</p>
+    <label><input id="consent" type="checkbox"> I agree to use my microphone for this test.</label>
+    <div class="actions">
+      <button id="record" disabled>Start recording</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+    <p id="status" role="status">Give microphone consent to begin.</p>
+    <audio id="playback" controls hidden></audio>
+    <a id="download" hidden>Download recording</a>
+  </main>
+</body>
+</html>
