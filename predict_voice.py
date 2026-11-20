@@ -20,6 +20,10 @@ from funasr import AutoModel
 REPO_ROOT = Path(__file__).resolve().parent
 CHECKPOINT_PATH = Path(os.environ.get("CHECKPOINT_PATH", REPO_ROOT / "model_weights" / "emotion2vec_final_model.pth"))
 MODEL_VERSION = "emotion2vec_plus_base-mlp-v1"
+# Used only when the team's trained checkpoint is absent (set EMOTION_BUILTIN_FALLBACK=0 to disable):
+# emotion2vec+ base ships its own 9-class emotion head, so the cue still works without the private file.
+BUILTIN_MODEL_VERSION = "emotion2vec_plus_base-builtin"
+BUILTIN_LABELS = {"angry", "disgusted", "fearful", "happy", "neutral", "sad", "surprised"}
 
 
 class VocalPrediction(TypedDict):
@@ -55,6 +59,7 @@ _load_lock = threading.Lock()
 _load_count = 0
 _load_ms = 0.0
 _encoder_source: Optional[str] = None
+_builtin = False
 
 
 def _cached_encoder_source() -> str:
@@ -71,9 +76,15 @@ def _cached_encoder_source() -> str:
     return "iic/emotion2vec_plus_base"
 
 
+def _loaded() -> bool:
+    return _encoder is not None and (_classifier is not None or _builtin)
+
+
 def model_status() -> dict:
-    return {"loaded": _encoder is not None and _classifier is not None,
-            "load_count": _load_count, "load_ms": _load_ms, "model_version": MODEL_VERSION,
+    return {"loaded": _loaded(),
+            "load_count": _load_count, "load_ms": _load_ms,
+            "model_version": BUILTIN_MODEL_VERSION if _builtin else MODEL_VERSION,
+            "trained_checkpoint": not _builtin and _classifier is not None,
             "encoder_cached": bool(_encoder_source and Path(_encoder_source).is_dir())}
 
 
@@ -83,20 +94,25 @@ def warm_model() -> dict:
 
 
 def _ensure_loaded() -> None:
-    if _encoder is not None and _classifier is not None:
+    if _loaded():
         return
     with _load_lock:
         _load_components()
 
 
+def _builtin_fallback_enabled() -> bool:
+    return os.environ.get("EMOTION_BUILTIN_FALLBACK", "1").strip().lower() not in ("0", "false", "no")
+
+
 def _load_components() -> None:
     global _encoder, _classifier, _scaler_mean, _scaler_scale, _idx_to_emotion
-    global _load_count, _load_ms, _encoder_source
+    global _load_count, _load_ms, _encoder_source, _builtin
 
-    if _encoder is not None and _classifier is not None:
+    if _loaded():
         return
 
-    if not CHECKPOINT_PATH.is_file():
+    use_builtin = not CHECKPOINT_PATH.is_file()
+    if use_builtin and not _builtin_fallback_enabled():
         raise FileNotFoundError(f"Model checkpoint not found: {CHECKPOINT_PATH}")
 
     started = perf_counter()
@@ -107,6 +123,14 @@ def _load_components() -> None:
         device="cpu",
         disable_update=True,
     )
+
+    if use_builtin:
+        _encoder = encoder
+        _encoder_source = source
+        _builtin = True
+        _load_count += 1
+        _load_ms = round((perf_counter() - started) * 1000, 1)
+        return
 
     checkpoint = torch.load(CHECKPOINT_PATH, map_location="cpu", weights_only=False)
 
@@ -176,6 +200,10 @@ def predict(audio_path: Path) -> VocalPrediction:
         wav_path = Path(temp_dir) / "input.wav"
         _convert_to_wav(audio_path, wav_path)
 
+        if _builtin:
+            result = _encoder.generate(input=str(wav_path), granularity="utterance", extract_embedding=False)
+            return _builtin_prediction(result[0]["labels"], result[0]["scores"])
+
         result = _encoder.generate(
             input=str(wav_path),
             granularity="utterance",
@@ -202,6 +230,18 @@ def predict(audio_path: Path) -> VocalPrediction:
         "label": predicted_emotion,
         "model_version": MODEL_VERSION,
     }
+
+
+def _builtin_prediction(labels, scores) -> VocalPrediction:
+    """Pick the highest-scoring real emotion; labels look like '生气/angry'."""
+    ranked = sorted(
+        ((float(score), str(label).split("/")[-1].strip().lower()) for label, score in zip(labels, scores)),
+        reverse=True,
+    )
+    for _, name in ranked:
+        if name in BUILTIN_LABELS:
+            return {"label": name, "model_version": BUILTIN_MODEL_VERSION}
+    raise ValueError("No recognizable emotion in base model output.")
 
 
 def main() -> None:

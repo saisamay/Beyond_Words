@@ -46,8 +46,10 @@ async function refreshHealth() {
     const health = await fetch("/health", { signal: AbortSignal.timeout(5000) });
     setPill($("#server-pill"), health.ok ? "ok" : "bad", health.ok ? "Server online" : "Server error");
     const info = await (await fetch("/v1/status", { signal: AbortSignal.timeout(5000) })).json();
-    const loaded = info.vocal_model?.loaded;
-    setPill($("#model-pill"), loaded ? "ok" : "warn", loaded ? "Emotion model ready" : "Emotion model off");
+    const vocal = info.vocal_model || {};
+    const label = !vocal.loaded ? "Emotion model off"
+      : vocal.trained_checkpoint === false ? "Emotion model ready (base)" : "Emotion model ready";
+    setPill($("#model-pill"), vocal.loaded ? "ok" : "warn", label);
   } catch {
     setPill($("#server-pill"), "bad", "Server offline");
     setPill($("#model-pill"), null, "Emotion model");
