@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
 import subprocess
 import sys
@@ -73,6 +74,17 @@ async def lifespan(application):
 
 app = FastAPI(title="Beyond Words", lifespan=lifespan)
 app.add_middleware(UploadLimit)
+
+# Lets other front ends (e.g. the team's sign-language site on Vercel) call this API from the
+# browser. Comma-separated origins; no cookies or credentials are used by this API.
+CORS_ALLOW_ORIGINS = [origin.strip() for origin in os.environ.get(
+    "CORS_ALLOW_ORIGINS",
+    "https://ai-sign-language-beyond-words-final.vercel.app,http://localhost:5173",
+).split(",") if origin.strip()]
+if CORS_ALLOW_ORIGINS:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(CORSMiddleware, allow_origins=CORS_ALLOW_ORIGINS,
+                       allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 
 @app.get("/health")
