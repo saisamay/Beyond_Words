@@ -16,7 +16,9 @@ Use Python 3.12, the existing `.venv`, and system `ffmpeg`:
 ```
 
 Open http://localhost:8080 and http://localhost:8080/health. Consent to sending
-audio to the server and Google, record, stop, listen, and select **Send to
+audio to the server and Google, 
+
+, stop, listen, and select **Send to
 Companion**. You can also choose the existing private sample. Missing or invalid
 clips return useful errors. Clips are limited to 8 MiB and 20 seconds; the
 recorder stops after 12 seconds.
@@ -45,7 +47,7 @@ of Git and browser JavaScript:
 | `GOOGLE_CLOUD_LOCATION` | Vertex model location; configure for the approved model |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Optional ADC credential file path outside the repo; user ADC or Cloud Run identity normally avoids this |
 | `GOOGLE_CLOUD_QUOTA_PROJECT` | Optional explicit quota project for Google client libraries |
-| `SPEECH_LANGUAGE_CODE` | Optional Speech-to-Text language; defaults to `en-US`, which transcribed Indian-accented test speech far more accurately than `en-IN` |
+| `SPEECH_LANGUAGE_CODE` | Optional Speech-to-Text language selection |
 | `SPEECH_TRANSPORT` | Optional STT transport; short uploads use REST by default; gRPC remains selectable |
 | `SPEECH_MODEL` | Optional STT recognition model; defaults to `latest_long` (more accurate on quiet/noisy speech), automatically retries with `default` if unsupported for the language |
 | `SPEECH_PHRASES` | Optional comma-separated words/names to bias recognition (e.g. product names, order IDs) |

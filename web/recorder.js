@@ -119,6 +119,52 @@ function stopMeter() {
 }
 drawIdleMeter();
 
+/* ---------- Live transcript (browser speech recognition, preview only) ---------- */
+const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+const livePanel = $("#live-panel");
+const liveText = $("#live-transcript");
+let recognition;
+
+function startLiveTranscript() {
+  if (!SpeechRecognitionApi) return;
+  try {
+    recognition = new SpeechRecognitionApi();
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    let finalText = "";
+    liveText.textContent = "";
+    liveText.dataset.empty = "Listening…";
+    livePanel.hidden = false;
+    livePanel.dataset.state = "on";
+    recognition.onresult = event => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const piece = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += piece + " ";
+        else interim += piece;
+      }
+      liveText.replaceChildren(document.createTextNode(finalText));
+      if (interim) {
+        const span = document.createElement("span");
+        span.className = "interim";
+        span.textContent = interim;
+        liveText.append(span);
+      }
+    };
+    recognition.onerror = () => {};
+    recognition.start();
+  } catch {
+    recognition = undefined;
+  }
+}
+
+function stopLiveTranscript() {
+  livePanel.dataset.state = "off";
+  try { recognition?.stop(); } catch { /* already stopped */ }
+  recognition = undefined;
+}
+
 /* ---------- Controls ---------- */
 function resetControls(message) {
   clearTimeout(stopTimer);
@@ -147,6 +193,7 @@ function showRecording(blob) {
   manualPanel.hidden = true;
   manual.value = "";
   $("#comparison").replaceChildren();
+  $("#turn-insights").hidden = true;
   if (recordingUrl) URL.revokeObjectURL(recordingUrl);
   recordingUrl = URL.createObjectURL(blob);
   const extension = {
@@ -201,6 +248,7 @@ record.addEventListener("click", async () => {
     });
     recorder.addEventListener("stop", () => {
       stream.getTracks().forEach(track => track.stop());
+      stopLiveTranscript();
       if (recordingFailed || !chunks.length) {
         resetControls("No audio was captured. Try recording again.");
         return;
@@ -209,6 +257,7 @@ record.addEventListener("click", async () => {
       resetControls("Recording ready. Play it back, then Send to Companion.");
     }, { once: true });
     recorder.start();
+    startLiveTranscript();
     recordStarted = performance.now();
     recorderUi.dataset.state = "recording";
     startMeter(stream);
@@ -217,6 +266,7 @@ record.addEventListener("click", async () => {
     stopTimer = setTimeout(() => stop.click(), MAX_SECONDS * 1000);
   } catch {
     stream?.getTracks().forEach(track => track.stop());
+    stopLiveTranscript();
     resetControls("Could not start recording. Check microphone permissions and try again.");
   }
 });
@@ -313,9 +363,16 @@ send.addEventListener("click", async () => {
       manual_transcript_required: "We couldn't make out the words. Type what you said and retry with the same clip.",
       reply_unavailable: "Google reply unavailable. Your clip remains ready to retry.",
       gemini_fallback: "Primary model busy — answered by the fallback model.",
+      insights_unavailable: "Turn insights unavailable for this turn.",
     }[value] || value)).join(" ");
     manualPanel.hidden = !data.fallback_status.includes("manual_transcript_required") && data.transcript_source !== "manual";
     comparisonToken = data.reply_text && data.vocal_cue ? data.comparison_token : undefined;
+    const insightBox = $("#turn-insights");
+    insightBox.hidden = !data.insights || !window.BW;
+    if (data.insights && window.BW) window.BW.renderInsightCard(insightBox, data.insights);
+    if (data.transcript) {
+      document.dispatchEvent(new CustomEvent("bw:turn", { detail: { ...data, source: "live" } }));
+    }
     status.textContent = data.error || "Companion turn ready.";
     if (!manualPanel.hidden) manual.focus();
   } catch (error) {

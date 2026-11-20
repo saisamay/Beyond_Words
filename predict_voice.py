@@ -26,9 +26,13 @@ BUILTIN_MODEL_VERSION = "emotion2vec_plus_base-builtin"
 BUILTIN_LABELS = {"angry", "disgusted", "fearful", "happy", "neutral", "sad", "surprised"}
 
 
-class VocalPrediction(TypedDict):
+class _VocalRequired(TypedDict):
     label: str
     model_version: str
+
+
+class VocalPrediction(_VocalRequired, total=False):
+    scores: dict[str, float]  # emotion -> probability, summing to ~1
 
 
 class EmotionClassifier(nn.Module):
@@ -225,10 +229,13 @@ def predict(audio_path: Path) -> VocalPrediction:
 
         predicted_index = int(torch.argmax(probabilities).item())
         predicted_emotion = _idx_to_emotion[predicted_index].lower()
+        scores = {_idx_to_emotion[index].lower(): round(float(value), 4)
+                  for index, value in enumerate(probabilities.tolist()) if index in _idx_to_emotion}
 
     return {
         "label": predicted_emotion,
         "model_version": MODEL_VERSION,
+        "scores": scores,
     }
 
 
@@ -238,10 +245,13 @@ def _builtin_prediction(labels, scores) -> VocalPrediction:
         ((float(score), str(label).split("/")[-1].strip().lower()) for label, score in zip(labels, scores)),
         reverse=True,
     )
-    for _, name in ranked:
-        if name in BUILTIN_LABELS:
-            return {"label": name, "model_version": BUILTIN_MODEL_VERSION}
-    raise ValueError("No recognizable emotion in base model output.")
+    real = [(score, name) for score, name in ranked if name in BUILTIN_LABELS]
+    if not real:
+        raise ValueError("No recognizable emotion in base model output.")
+    total = sum(score for score, _ in real) or 1.0
+    # Renormalize over the 7 real emotions so the scores are comparable across clips.
+    scores = {name: round(score / total, 4) for score, name in real}
+    return {"label": real[0][1], "model_version": BUILTIN_MODEL_VERSION, "scores": scores}
 
 
 def main() -> None:

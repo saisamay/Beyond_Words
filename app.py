@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse, Response
 
 import companion
+import insights
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_BODY_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
@@ -233,6 +234,10 @@ def process_turn(source: Path, wav: Path, manual: str) -> dict:
                        "error": "Transcription unavailable. Enter what you said and retry with this same clip."})
     configuration = companion.reply_configuration()
     gemini_started = time.perf_counter()
+    # The word analysis runs alongside the reply, so insights add no extra latency.
+    insight_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="bw-insight")
+    insight_future = insight_pool.submit(turn_insights, transcript, cue)
+    insight_pool.shutdown(wait=False)
     try:
         result = companion.reply_result(transcript, cue, configuration=configuration)
     except Exception as error:
@@ -249,10 +254,22 @@ def process_turn(source: Path, wav: Path, manual: str) -> dict:
     if result["fallback_used"]:
         fallbacks.append("gemini_fallback")
     token = token_for(transcript, cue, configuration=configuration, reply_result=result)
+    turn_insight = insight_future.result()
+    if turn_insight is None:
+        fallbacks.append("insights_unavailable")
     return finish({"transcript": transcript, "transcript_source": transcript_source,
                    "vocal_cue": cue, "reply_text": result["reply_text"],
                    "resolved_model": result["resolved_model"], "gemini_attempts": result["attempts"],
-                   "fallback_status": fallbacks, "comparison_token": token})
+                   "fallback_status": fallbacks, "comparison_token": token, "insights": turn_insight})
+
+
+def turn_insights(transcript: str, cue: dict | None) -> dict | None:
+    """Best effort: a failed analysis never fails the turn."""
+    try:
+        return insights.build(cue, companion.analyze_text(transcript))
+    except Exception as error:
+        logger.warning("Turn insights unavailable: %s", type(error).__name__)
+        return None
 
 
 @app.post("/v1/turn")
@@ -328,6 +345,59 @@ def compare(body: Comparison):
         "comparison_ms": round((time.perf_counter() - started) * 1000, 1),
         "fallback_status": ["gemini_fallback"] if regenerated or resolved == data["configuration"]["fallback_model"] else []},
         headers={"Cache-Control": "no-store"})
+
+
+class VocalProfile(BaseModel):
+    label: str = Field(max_length=20)
+    scores: dict[str, float] = Field(default_factory=dict, max_length=10)
+
+
+class TextAnalysis(BaseModel):
+    transcript: str = Field(min_length=1, max_length=1000)
+    vocal_profile: VocalProfile | None = None
+    include_reply: bool = True
+    compare_text_only: bool = True
+
+
+@app.post("/v1/analyze-text")
+def analyze_text(body: TextAnalysis):
+    """Benchmarks and trajectory simulation: real Gemini analysis and reply for scripted text.
+
+    The vocal profile here is scripted by the caller, not measured from audio, and the
+    response says so, so it is never mistaken for a live recording.
+    """
+    transcript = body.transcript.strip()
+    cue = None
+    if body.vocal_profile:
+        cue = {"label": body.vocal_profile.label.lower(), "model_version": "scripted-profile",
+               "scores": {k.lower(): float(v) for k, v in body.vocal_profile.scores.items()}}
+    started = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="bw-studio") as pool:
+        # A plain text-only bot reply (no voice, no analysis) runs alongside the analysis.
+        baseline = (pool.submit(companion.reply_result, transcript, None)
+                    if body.include_reply and body.compare_text_only else None)
+        try:
+            analysis = companion.analyze_text(transcript)
+        except Exception as error:
+            detail = companion.provider_error_details(error, [transcript])
+            return JSONResponse({"detail": "Analysis unavailable. " + str(detail["message"])[:300]},
+                                status_code=503, headers={"Cache-Control": "no-store"})
+        insight = insights.build(cue, analysis)
+        payload = {"transcript": transcript, "vocal_cue": cue, "vocal_source": "scripted" if cue else None,
+                   "insights": insight, "reply_text": None, "resolved_model": None, "text_only_reply": None}
+        if body.include_reply:
+            try:
+                result = companion.aware_reply_result(transcript, cue, insight)
+                payload.update(reply_text=result["reply_text"], resolved_model=result["resolved_model"])
+            except Exception as error:
+                logger.warning("Analysis reply unavailable: %s", type(error).__name__)
+        if baseline is not None:
+            try:
+                payload["text_only_reply"] = baseline.result()["reply_text"]
+            except Exception as error:
+                logger.warning("Text-only reply unavailable: %s %s", type(error).__name__, str(error)[:300])
+    payload["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
 class SpeechRequest(BaseModel):

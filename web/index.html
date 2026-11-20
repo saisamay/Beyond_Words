@@ -4,9 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Beyond Words | Companion</title>
-  <meta name="description" content="A voice companion that listens to your words and how you say them.">
+  <meta name="description" content="Voice emotion intelligence: hear what words alone miss.">
   <link rel="stylesheet" href="/recorder.css">
+  <link rel="stylesheet" href="/studio.css">
   <script src="/recorder.js" defer></script>
+  <script src="/studio.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -16,22 +18,36 @@
       </span>
       <span class="brand-text">
         <strong>Beyond Words</strong>
-        <span>Voice Companion</span>
+        <span>Voice Emotion Intelligence</span>
       </span>
     </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" class="tab" data-tab="companion" aria-selected="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Companion
+      </button>
+      <button role="tab" class="tab" data-tab="studio" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Studio Session
+      </button>
+      <button role="tab" class="tab" data-tab="trajectory" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 14l4-4 4 3 5-6"/></svg>Trajectory
+      </button>
+      <button role="tab" class="tab" data-tab="enterprise" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg>Enterprise &amp; ROI
+      </button>
+    </nav>
     <div class="health" aria-live="polite">
       <span class="pill" id="server-pill"><span class="dot"></span><span>Connecting…</span></span>
       <span class="pill" id="model-pill"><span class="dot"></span><span>Emotion model</span></span>
     </div>
   </header>
 
-  <main class="layout">
+  <!-- ===================== Companion ===================== -->
+  <main class="layout panel" data-panel="companion">
     <section class="intro">
       <h1>Your words, with room for how you say them.</h1>
       <p>Speak for up to 12 seconds. We transcribe what you said, read the tone of your voice, and craft a reply that fits both.</p>
     </section>
 
-    <!-- Capture panel -->
     <section class="card capture" aria-labelledby="capture-title">
       <div class="card-head">
         <h2 id="capture-title"><span class="step">1</span> Speak</h2>
@@ -55,6 +71,11 @@
             <span class="sr">Stop</span>
           </button>
         </div>
+      </div>
+
+      <div class="live" id="live-panel" hidden aria-live="polite">
+        <span class="live-label"><span class="live-dot"></span> Live transcript</span>
+        <p id="live-transcript" class="live-text"></p>
       </div>
 
       <div class="clip-preview" id="clip-preview" hidden>
@@ -81,7 +102,6 @@
       <p id="status" class="status" role="status">Give microphone consent to begin.</p>
     </section>
 
-    <!-- Conversation panel -->
     <section class="card conversation" aria-labelledby="conversation-title">
       <div class="card-head">
         <h2 id="conversation-title"><span class="step">2</span> Conversation</h2>
@@ -127,12 +147,12 @@
           </div>
         </article>
 
+        <div id="turn-insights" class="insight-card" hidden></div>
         <p id="fallback" class="notice"></p>
         <div id="comparison" class="comparison" aria-live="polite"></div>
       </div>
     </section>
 
-    <!-- Support scenario -->
     <details class="card support">
       <summary>
         <span><span class="step">3</span> Enterprise support scenario</span>
@@ -155,6 +175,102 @@
         </div>
       </div>
     </details>
+  </main>
+
+  <!-- ===================== Studio Session ===================== -->
+  <main class="layout panel" data-panel="studio" hidden>
+    <section class="intro">
+      <h1>Studio Session — when the voice and the words disagree.</h1>
+      <p>Text-only bots read “Great service, wonderful job” as praise. Beyond Words compares the <strong>vocal emotion</strong> with the <strong>meaning of the words</strong> and flags the gap.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2><span class="step">A</span> Benchmarks</h2></div>
+      <div class="bench-list" id="bench-list"></div>
+      <p class="hint">Benchmark voices are <strong>scripted vocal profiles</strong> (emotion probabilities you can see below). Gemini’s word analysis and both replies are generated <strong>live</strong>.</p>
+
+      <div class="divider"><span>or try your own</span></div>
+      <label class="field">Utterance
+        <textarea id="studio-text" rows="2" maxlength="1000" placeholder="e.g. Oh perfect, another delay. Just what I needed."></textarea>
+      </label>
+      <label class="field">Scripted voice emotion
+        <select id="studio-voice">
+          <option value="">No voice — words only</option>
+          <option value="disgusted">🤢 Disgusted</option>
+          <option value="angry">😠 Angry</option>
+          <option value="sad">😢 Sad</option>
+          <option value="fearful">😨 Fearful</option>
+          <option value="neutral">😐 Neutral</option>
+          <option value="surprised">😮 Surprised</option>
+          <option value="happy">😊 Happy</option>
+        </select>
+      </label>
+      <button id="studio-run" class="primary block"><span class="spinner" aria-hidden="true"></span><span>Analyze</span></button>
+      <p id="studio-status" class="status" role="status">Pick a benchmark or type your own line.</p>
+    </section>
+
+    <section class="card studio-result" aria-live="polite">
+      <div class="card-head"><h2><span class="step">B</span> Dissonance analysis</h2><span class="meta" id="studio-meta"></span></div>
+      <div class="empty" id="studio-empty">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+        <p>Run a benchmark to see the analysis.</p>
+        <small>Try <strong>Masked Sarcasm &amp; Dissonance</strong> first.</small>
+      </div>
+      <div id="studio-output" hidden></div>
+    </section>
+  </main>
+
+  <!-- ===================== Trajectory ===================== -->
+  <main class="layout panel" data-panel="trajectory" hidden>
+    <section class="intro">
+      <h1>Multi-turn trajectory — is the conversation calming down?</h1>
+      <p>Every Companion turn and simulation step adds a point. <strong>ADV</strong> (average de-escalation velocity) is the average change in distress per turn — negative means the customer is calming down.</p>
+    </section>
+    <section class="card wide">
+      <div class="card-head">
+        <h2><span class="step">C</span> Distress over turns</h2>
+        <div class="row-actions">
+          <button id="traj-sim" class="primary"><span class="spinner" aria-hidden="true"></span><span>Simulate 3-turn de-escalation arc</span></button>
+          <button id="traj-clear" class="secondary">Clear</button>
+        </div>
+      </div>
+      <div class="kpis" id="traj-kpis"></div>
+      <div class="chart-wrap"><svg id="traj-chart" viewBox="0 0 800 300" role="img" aria-label="Distress by turn"></svg></div>
+      <p id="traj-status" class="status" role="status">Record Companion turns or run the simulation.</p>
+      <ol class="turn-list" id="traj-list"></ol>
+    </section>
+  </main>
+
+  <!-- ===================== Enterprise & ROI ===================== -->
+  <main class="layout panel" data-panel="enterprise" hidden>
+    <section class="intro">
+      <h1>Enterprise &amp; ROI hub</h1>
+      <p>Send every analysed turn to your helpdesk, and estimate what fewer escalations are worth to your contact center.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="step">D</span> Webhook dispatcher</h2>
+        <select id="hook-target" aria-label="Destination">
+          <option value="zendesk">Zendesk ticket</option>
+          <option value="salesforce">Salesforce case</option>
+          <option value="generic">Generic JSON</option>
+        </select>
+      </div>
+      <p class="hint" id="hook-source">Showing a sample turn. Run a Companion turn or a benchmark to use real data.</p>
+      <pre class="code" id="hook-payload"></pre>
+      <div class="row-actions">
+        <button id="hook-copy" class="secondary">Copy payload</button>
+        <span class="hint">Preview only — nothing is sent to Zendesk or Salesforce from this demo.</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2><span class="step">E</span> Contact-center ROI calculator</h2></div>
+      <div class="sliders" id="roi-sliders"></div>
+      <div class="roi-out" id="roi-out"></div>
+      <p class="hint">Estimate from the assumptions above — adjust them to your own contact-center data.</p>
+    </section>
   </main>
 
   <footer class="footer">Beyond Words · Buildathon MVP · Audio is processed only for this demo turn.</footer>
