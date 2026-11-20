@@ -251,24 +251,46 @@ def _generate(system_prompt: str, contents: str, *, model: str | None = None,
         location=location or os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
         http_options=types.HttpOptions(timeout=timeout_ms or request_timeout_ms(), retry_options=types.HttpRetryOptions(attempts=1)),
     ) as client:
-        result = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=settings["temperature"],
-                max_output_tokens=settings["max_output_tokens"],
-                thinking_config=types.ThinkingConfig(thinking_level=settings["thinking_level"]),
-            ),
-        )
-        metadata = response_metadata(result)
-        text = final_text(result)
+        def attempt(temperature):
+            result = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=temperature,
+                    max_output_tokens=settings["max_output_tokens"],
+                    thinking_config=types.ThinkingConfig(thinking_level=settings["thinking_level"]),
+                ),
+            )
+            return response_metadata(result), final_text(result)
+
+        metadata, text = attempt(settings["temperature"])
+        if ((degenerate_reply(text, contents) or "MAX_TOKENS" in metadata["finish_reasons"])
+                and settings["temperature"] == 0
+                and metadata["prompt_block_reason"] in (None, "BLOCK_REASON_UNSPECIFIED")):
+            # At temperature 0 a model can deterministically loop ("8888…") or emit junk digits;
+            # an identical retry would repeat it, so retry once with a little sampling.
+            logger.warning("Gemini degenerate reply, retrying with sampling: %s", json.dumps(metadata))
+            metadata, text = attempt(DEGENERATE_RETRY_TEMPERATURE)
+            if degenerate_reply(text, contents):
+                text = ""
         blocked = metadata["prompt_block_reason"] not in (None, "BLOCK_REASON_UNSPECIFIED")
         if not text or blocked or "MAX_TOKENS" in metadata["finish_reasons"]:
             logger.warning("Gemini response metadata: %s", json.dumps(metadata))
             raise ValueError("Gemini returned no complete final reply: " + json.dumps(metadata))
         logger.info("Gemini response metadata: %s", json.dumps(metadata))
         return text
+
+
+DEGENERATE_RETRY_TEMPERATURE = 0.4
+
+
+def degenerate_reply(text: str, contents: str) -> bool:
+    """A runaway or junk reply: empty, overlong for a 1–3 sentence answer, or containing a
+    long digit run (6+) that does not appear in the user's input."""
+    if not text or len(text) > 1200:
+        return True
+    return any(run not in contents for run in re.findall(r"\d{6,}", text))
 
 
 def synthesize(text: str) -> bytes:

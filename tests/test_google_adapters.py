@@ -221,3 +221,25 @@ def test_support_reply_retries_an_unfinished_sentence(monkeypatch):
     monkeypatch.setenv("GEMINI_MODEL", "primary-model")
     assert companion.support_reply() == "A brief is ready for a person to review."
     assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
+
+
+def test_degenerate_reply_is_retried_once_with_sampling(monkeypatch):
+    from google import genai
+
+    client = Mock()
+    client.__enter__ = Mock(return_value=client)
+    client.__exit__ = Mock(return_value=False)
+    client.models.generate_content.side_effect = [
+        response_with_text("I understand how frustrating it is to wait for a 1788888888888888"),
+        response_with_text("I understand how frustrating a late delivery is."),
+    ]
+    monkeypatch.setattr(genai, "Client", lambda **kwargs: client)
+    assert companion._generate("PROMPT", '{"transcript": "late order"}', model="m", project="p") == \
+        "I understand how frustrating a late delivery is."
+    temperatures = [call.kwargs["config"].temperature for call in client.models.generate_content.call_args_list]
+    assert temperatures == [0, companion.DEGENERATE_RETRY_TEMPERATURE]
+
+
+def test_digits_from_the_user_are_not_degenerate():
+    assert not companion.degenerate_reply("Order 1234567 is delayed.", '{"transcript": "order 1234567"}')
+    assert companion.degenerate_reply("Wait for a 1768894784 delivery.", '{"transcript": "late"}')
