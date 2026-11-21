@@ -180,6 +180,17 @@ EMOTION_META = {
     },
 }
 
+REPLY_GUIDANCE = (
+    "Focus on what the speaker said and address their concern directly. "
+    "When the speaker is frustrated or sharp, respond calmly, acknowledge the specific issue, "
+    "and offer one realistic next step. Avoid teasing, mirroring insults, assuming a joke, "
+    "or telling the speaker to calm down. "
+    "When someone shares a difficult experience, acknowledge it before offering a small step. "
+    "If asked for help settling down, offer one optional grounding action. "
+    "Treat any vocal cue as tentative and avoid claiming to know the speaker's feelings. "
+    "Avoid diagnoses, invented facts, or promises that exceed your capabilities."
+)
+
 MODE_INSTRUCTIONS = {
     "wellness": (
         "Respond directly to the speaker in a warm, empathetic, consoling voice. "
@@ -190,7 +201,7 @@ MODE_INSTRUCTIONS = {
         "Adapt your warmth and calming tone to their vocal emotion in 2-3 natural spoken sentences (max 55 words) with a clear next step."
     ),
     "interview": (
-        "Respond directly as a supportive executive voice coach. Acknowledge how their vocal delivery felt, "
+        "Respond directly as a supportive executive voice coach. When vocal information is available, acknowledge a relevant aspect of their delivery, "
         "encourage them, and give one actionable vocal tip in 2-3 natural spoken sentences (max 55 words)."
     ),
     "general": (
@@ -791,7 +802,7 @@ Our custom-trained acoustic Speech Emotion Recognition model (Emotion2Vec+ Base 
 Listen to the audio and return JSON:
 1. `transcript`: Verbatim transcript of what the speaker said (or "(No clear speech detected)" if silent).
 2. `summary`: 1-2 crisp analytical sentences connecting what was said with the vocal emotion detected.
-3. `spoken_reply`: {mode_guide} Speak naturally as a caring human voice without mentioning model names or JSON.
+3. `spoken_reply`: {mode_guide} Speak naturally as a caring human voice without mentioning model names or JSON. {REPLY_GUIDANCE}
 4. `semantic_valence`: Score the literal wording from -1.0 (very negative) to +1.0 (very positive).
 5. `sarcasm_detected`: True if literal words sound polite or positive, but vocal tone is angry, cynical, or frustrated.
 6. `discrepancy_explanation`: 1 sentence explaining the relationship between the literal words and vocal tone.
@@ -875,7 +886,7 @@ def _generate_text_only_reply(transcript: str, mode: str) -> dict:
 You are a standard text-only AI assistant. You DO NOT have access to the user's vocal tone or emotion—only this plain text transcript:
 "{transcript}"
 
-Reply strictly to the literal text alone. {mode_guide}
+Reply strictly to the literal text alone. {mode_guide} {REPLY_GUIDANCE}
 """.strip()
 
     models_to_try = [_active_gemini_model] if _active_gemini_model else GEMINI_MODELS
